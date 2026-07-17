@@ -1,0 +1,193 @@
+name: CI - Non-LTS Nightly (Java 26)
+
+on:
+  schedule:
+    # Run nightly at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:  # Allow manual triggering
+    inputs:
+      enabled:
+        description: 'Enable workflow (set to false to disable during LTS transitions)'
+        required: false
+        default: 'true'
+
+jobs:
+  build-and-test:
+    name: Build and Test - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    # Allow disabling workflow during LTS transition periods
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.enabled == 'true' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      # 1. Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Install JDK 25 for build and JDK 26 for testing
+      - name: Set up JDK 25 (Temurin) - for build
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+
+      - name: Capture JDK 25 (Temurin) path
+        shell: bash
+        run: echo "JAVA_HOME_25_TEMURIN=$JAVA_HOME" >> $GITHUB_ENV
+
+      - name: Set up JDK 26 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '26'
+
+      - name: Capture JDK 26 (Temurin) path
+        shell: bash
+        run: echo "JAVA_HOME_26_TEMURIN=$JAVA_HOME" >> $GITHUB_ENV
+
+      - name: Set up JDK 26 (Semeru)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'semeru'
+          java-version: '26'
+
+      - name: Capture JDK 26 (Semeru) path
+        shell: bash
+        run: echo "JAVA_HOME_26_SEMERU=$JAVA_HOME" >> $GITHUB_ENV
+
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      # 3. Generate toolchains.xml
+      - name: Generate toolchains.xml
+        shell: bash
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/toolchains.xml << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <toolchains xmlns="http://maven.apache.org/TOOLCHAINS/1.1.0"
+                      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                      xsi:schemaLocation="http://maven.apache.org/TOOLCHAINS/1.1.0
+                                          http://maven.apache.org/xsd/toolchains-1.1.0.xsd">
+            <toolchain>
+              <type>jdk</type>
+              <provides>
+                <version>26</version>
+                <vendor>temurin</vendor>
+              </provides>
+              <configuration>
+                <jdkHome>${JAVA_HOME_26_TEMURIN}</jdkHome>
+              </configuration>
+            </toolchain>
+            <toolchain>
+              <type>jdk</type>
+              <provides>
+                <version>26</version>
+                <vendor>semeru</vendor>
+              </provides>
+              <configuration>
+                <jdkHome>${JAVA_HOME_26_SEMERU}</jdkHome>
+              </configuration>
+            </toolchain>
+          </toolchains>
+          EOF
+
+      # 4. Build once with Java 25
+      - name: Build with Java 25
+        shell: bash
+        run: |
+          export JAVA_HOME="${JAVA_HOME_25_TEMURIN}"
+          mvn clean install -DskipTests -B -V
+
+      # 5. Run tests with Java 26 (Temurin) - Linux only (Testcontainers requires Docker)
+      - name: Test with Java 26 (Temurin)
+        if: runner.os == 'Linux'
+        id: test-java26-temurin
+        shell: bash
+        timeout-minutes: 30
+        run: |
+          mvn test -Djdk.test.version=26 -Djdk.test.vendor=temurin -B
+        continue-on-error: true
+
+      - name: Publish test results - Java 26 (Temurin) - ${{ matrix.os }}
+        if: always() && runner.os == 'Linux'
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: '**/target/surefire-reports/TEST-*.xml'
+          check_name: 'Test Results - Java 26 (Temurin) - ${{ matrix.os }}'
+          comment_mode: off
+
+      - name: Upload test results - Java 26 (Temurin) - ${{ matrix.os }}
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-java26-temurin-${{ matrix.os }}
+          path: '**/target/surefire-reports/**'
+          retention-days: 30
+
+      # 6. Run tests with Java 26 (Semeru) - Linux only (Testcontainers requires Docker)
+      - name: Test with Java 26 (Semeru)
+        if: runner.os == 'Linux'
+        id: test-java26-semeru
+        shell: bash
+        timeout-minutes: 30
+        run: |
+          mvn test -Djdk.test.version=26 -Djdk.test.vendor=semeru -B
+        continue-on-error: true
+
+      - name: Publish test results - Java 26 (Semeru) - ${{ matrix.os }}
+        if: always() && runner.os == 'Linux'
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: '**/target/surefire-reports/TEST-*.xml'
+          check_name: 'Test Results - Java 26 (Semeru) - ${{ matrix.os }}'
+          comment_mode: off
+
+      - name: Upload test results - Java 26 (Semeru) - ${{ matrix.os }}
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-java26-semeru-${{ matrix.os }}
+          path: '**/target/surefire-reports/**'
+          retention-days: 30
+
+      # 7. Check for test failures and fail job if any occurred
+      - name: Check test results
+        if: always()
+        shell: bash
+        run: |
+          echo "Checking test results from Java 26 permutations..."
+          FAILED=0
+
+          # Only check test results on Linux (tests are skipped on macOS/Windows due to Docker requirement)
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            if [ "${{ steps.test-java26-temurin.outcome }}" != "success" ]; then
+              echo "FAILED: Java 26 (Temurin) tests failed"
+              FAILED=1
+            fi
+
+            if [ "${{ steps.test-java26-semeru.outcome }}" != "success" ]; then
+              echo "FAILED: Java 26 (Semeru) tests failed"
+              FAILED=1
+            fi
+
+            if [ $FAILED -eq 1 ]; then
+              echo ""
+              echo "One or more test permutations failed. Check the test result artifacts and logs above."
+              exit 1
+            else
+              echo "SUCCESS: All Java 26 test permutations passed"
+            fi
+          else
+            echo "INFO: Tests skipped on ${{ runner.os }} (Testcontainers requires Docker, only available on Linux runners)"
+            echo "SUCCESS: Build successful on ${{ runner.os }}"
+          fi
