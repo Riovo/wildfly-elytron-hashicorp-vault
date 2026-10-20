@@ -5,12 +5,14 @@
 package org.wildfly.security.hashicorp.vault;
 
 import static org.wildfly.security.hashicorp.vault._private.HashiCorpVaultLogger.ROOT_LOGGER;
+import static org.wildfly.security.hashicorp.vault._private.SensitiveValueHasher.hashForLog;
 
 import java.net.http.HttpClient;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import javax.net.ssl.SSLContext;
 
@@ -105,15 +107,22 @@ public class VaultConnector {
      * @throws CredentialStoreException thrown when all login strategies fail
      */
     private Vault tryLoginWithFallback(LoginContext loginContext, VaultConfig config) throws CredentialStoreException {
-        for (VaultLoginStrategy strategy : composePossibleLoginStrategiesPrioritized(loginContext)) {
+        List<VaultLoginStrategy> strategies = composePossibleLoginStrategiesPrioritized(loginContext);
+        String strategyNames = strategies.stream()
+                .map(s -> s.getClass().getSimpleName())
+                .collect(Collectors.joining(", "));
+        ROOT_LOGGER.vaultLoginFallbackStarting(strategies.size(), strategyNames);
+
+        for (VaultLoginStrategy strategy : strategies) {
             try {
+                ROOT_LOGGER.vaultLoginTryingStrategy(strategy.getClass().getSimpleName());
                 String response = strategy.tryLogin(loginContext);
 
                 if (response != null) {
                     config.token(response);
                     Vault vault = Vault.create(config.build());
-                    //test that token can be used to perform anything requiring authentication
                     vault.auth().lookupSelf();
+                    ROOT_LOGGER.vaultLoginStrategySucceeded(strategy.getClass().getSimpleName());
                     return vault;
                 }
             } catch (VaultException e) {
@@ -207,29 +216,24 @@ public class VaultConnector {
     private synchronized Vault getOrCreateVaultInstance(int kvVersion, int segmentCount) throws CredentialStoreException {
         final String cacheKey;
         if (kvVersion == 1) {
-            // KV v1 doesn't use /data/ insertion, so segment count doesn't matter
             cacheKey = VaultConstants.ENGINE_TYPE_KV_V1;
         } else {
-            // KV v2 - need to account for mount path segment count
             cacheKey = VaultConstants.ENGINE_TYPE_KV_V2 + "-" + segmentCount;
         }
 
+        Vault cached = vaultInstanceCache.get(cacheKey);
+        if (cached != null) {
+            ROOT_LOGGER.vaultInstanceCacheHit(cacheKey);
+            return cached;
+        }
+
+        ROOT_LOGGER.vaultInstanceCreating(kvVersion, segmentCount, this.vaultUrl, this.namespace, hashForLog(this.token));
         try {
-            return vaultInstanceCache.computeIfAbsent(cacheKey,
-                k -> {
-                    try {
-                        return createVaultInstance(kvVersion, segmentCount);
-                    } catch (VaultException | CredentialStoreException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
-        } catch (RuntimeException e) {
-            // Unwrap CredentialStoreException if it was wrapped in RuntimeException
-            Throwable cause = e.getCause();
-            if (cause instanceof CredentialStoreException) {
-                throw (CredentialStoreException) cause;
-            }
-            throw e;
+            Vault instance = createVaultInstance(kvVersion, segmentCount);
+            vaultInstanceCache.put(cacheKey, instance);
+            return instance;
+        } catch (VaultException e) {
+            throw new CredentialStoreException("Failed to create Vault instance: " + e.getMessage(), e);
         }
     }
 
@@ -347,6 +351,7 @@ public class VaultConnector {
      * @throws CredentialStoreException if listing fails
      */
     public List<String> listSecretsAtPath(String mountPath, String secretPath, String engineType) throws CredentialStoreException {
+        ROOT_LOGGER.vaultListingSecretsAtPath(mountPath, secretPath, engineType);
         try {
             // For KV v2, the Vault library automatically adds /metadata/ when listing
             // So we just pass mount + secret path, and it constructs the full path
@@ -367,6 +372,8 @@ public class VaultConnector {
 
             if (status == 200) {
                 List<String> keys = response.getListData();
+                int count = keys != null ? keys.size() : 0;
+                ROOT_LOGGER.vaultListedSecrets(count, mountPath, secretPath);
                 return keys != null ? keys : new ArrayList<>();
             } else if (status == 404) {
                 // Path doesn't exist or is empty
