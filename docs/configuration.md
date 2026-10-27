@@ -152,6 +152,8 @@ Minimal configuration for a local Vault instance:
 
 Configuration with custom CA certificate:
 
+When no `SSLContext` is supplied programmatically, initialization loads the configured stores and builds the TLS configuration. An incorrect store password fails initialization with a `CredentialStoreException` identifying the key store or trust store. HTTPS validates the server certificate and connection hostname; the first remote operation verifies connectivity and authentication.
+
 ```xml
 <credential-store name="vault-store"
                   type="hashicorp-vault">

@@ -86,7 +86,7 @@ module add --name=org.wildfly.vaultcredentialstore --resources=/path/to/repo/tar
 
 /subsystem=elytron/provider-loader=vaultProviderLoader:add(class-names=[org.wildfly.security.hashicorp.vault.HashicorpVaultCredentialStoreProvider],module=org.wildfly.vaultcredentialstore)
 
-/subsystem=elytron/credential-store=vault-store:add(providers=vaultProviderLoader,implementation-properties={host-address="https://localhost:9200", trustStorePath="/path/to/client.truststore.jks"},type=HashicorpVaultCredentialStore,credential-reference={clear-text="myroot"})
+/subsystem=elytron/credential-store=vault-store:add(providers=vaultProviderLoader,implementation-properties={host-address="https://localhost:9200", trust-store-path="/path/to/client.truststore.jks"},type=HashicorpVaultCredentialStore,credential-reference={clear-text="myroot"})
 ```
 
 Example result configuration (`standalone.xml` or `domain.xml`):
@@ -101,9 +101,9 @@ Example result configuration (`standalone.xml` or `domain.xml`):
             <implementation-properties>
                 <property name="host-address" value="https://vault.example.com:8200"/>
                 <property name="namespace" value="production"/>
-                <property name="trustStorePath" value="/path/to/vault-truststore.jks"/>
-                <property name="keyStorePath" value="/path/to/vault-keystore.jks"/>
-                <property name="keyStorePass" value="keystore-password"/>
+                <property name="trust-store-path" value="/path/to/vault-truststore.jks"/>
+                <property name="key-store-path" value="/path/to/vault-keystore.jks"/>
+                <property name="key-store-pass" value="keystore-password"/>
             </implementation-properties>
             <credential-reference clear-text="root-token-id"/>
         </credential-store>
@@ -185,9 +185,10 @@ Reference credentials from Vault in your WildFly configuration:
 |----------|----------|-------------|---------|
 | `host-address` | Yes | Vault server URL | `https://vault.example.com:8200` |
 | `namespace` | No | Vault namespace (Enterprise) | `production` |
-| `trustStorePath` | No | Path to trust store for SSL | `/path/to/truststore.jks` |
-| `keyStorePath` | No | Path to key store for client auth | `/path/to/keystore.jks` |
-| `keyStorePass` | No | Key store password | `keystore-password` |
+| `trust-store-path` | No | Path to trust store for SSL | `/path/to/truststore.jks` |
+| `trust-store-pass` | No | Trust store password | `truststore-password` |
+| `key-store-path` | No | Path to key store for client auth | `/path/to/keystore.jks` |
+| `key-store-pass` | No | Key store password | `keystore-password` |
 | `support-legacy-alias-format` | No | Enable legacy format support | `true` or `false` |
 | `default-engine-type` | No | Default secret engine type | `KVv2` (default), `KVv1`, etc. |
 | `default-mount-path` | No | Default mount path | `secret` (default) |
@@ -213,7 +214,7 @@ docker run --cap-add=IPC_LOCK  -p 8200:8200 -p 9200:9200 -e 'VAULT_DEV_LISTEN_AD
 Run the above in the folder where you have your server certificate and private key. You can configure a credential store that connects to the above with e.g.:
 
 ```bash
-/subsystem=elytron/credential-store=vault_store:add(providers=vaultProviderLoader,implementation-properties={host-address="https://localhost:9200", trustStorePath="/path/to/client.truststore.jks"},type=HashicorpVaultCredentialStore,credential-reference={clear-text="myroot"})
+/subsystem=elytron/credential-store=vault_store:add(providers=vaultProviderLoader,implementation-properties={host-address="https://localhost:9200", trust-store-path="/path/to/client.truststore.jks"},type=HashicorpVaultCredentialStore,credential-reference={clear-text="myroot"})
 ```
 
 ## Using Podman instead of Docker
