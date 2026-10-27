@@ -9,9 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
@@ -20,11 +18,6 @@ import org.wildfly.security.credential.store.CredentialStoreException;
 
 import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.VaultException;
-import io.smallrye.certs.CertificateFiles;
-import io.smallrye.certs.CertificateGenerator;
-import io.smallrye.certs.CertificateRequest;
-import io.smallrye.certs.Format;
-import io.smallrye.certs.PemCertificateFiles;
 
 /**
  * Dedicated tests for Vault listening on HTTPS interface
@@ -179,16 +172,9 @@ public class VaultConnectorHttpsTestCase {
     public void testConnectionFailsWithUntrustedServerCert() throws Exception {
         startVaultTestContainer();
 
-        Path wrongCertDir = Files.createTempDirectory("wrong_certs");
+        Path wrongCertDir = TlsTestMaterial.temporaryDirectory("wrong_certs");
         try {
-            CertificateRequest request = new CertificateRequest()
-                    .withName("wrong")
-                    .withPassword("secret")
-                    .withClientCertificate()
-                    .withFormat(Format.PEM);
-            List<CertificateFiles> wrongCerts = new CertificateGenerator(wrongCertDir, true).generate(request);
-            PemCertificateFiles wrongPem = (PemCertificateFiles) wrongCerts.stream()
-                    .filter(f -> f instanceof PemCertificateFiles).findFirst().get();
+            TlsTestMaterial wrongPem = TlsTestMaterial.generate(wrongCertDir, "localhost", true);
 
             SslConfig wrongTrustConfig = new SslConfig()
                     .pemFile(wrongPem.trustFile().toFile())

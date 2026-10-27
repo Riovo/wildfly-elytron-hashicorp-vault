@@ -53,8 +53,8 @@ public class VaultConnectorWithHttpClientTestCase {
 
         sslContext = SslContextTestHelper.createWithClientAuth(
                 vaultTestContainer.getHttpsTrustFile(),
-                vaultTestContainer.getClientCertificateFiles().clientCertFile(),
-                vaultTestContainer.getClientCertificateFiles().clientKeyFile());
+                vaultTestContainer.getClientCertificateFiles().certFile(),
+                vaultTestContainer.getClientCertificateFiles().keyFile());
     }
 
     @AfterEach
