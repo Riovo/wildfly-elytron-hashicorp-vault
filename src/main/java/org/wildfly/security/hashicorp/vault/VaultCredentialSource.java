@@ -170,7 +170,7 @@ public class VaultCredentialSource implements CredentialSource {
     @Override
     public <C extends Credential> C getCredential(Class<C> credentialType, String algorithm,
                                                   AlgorithmParameterSpec parameterSpec) throws IOException {
-        ROOT_LOGGER.credentialSourceRetrieving(credentialType.getSimpleName(), alias.toString());
+        ROOT_LOGGER.tracef("VaultCredentialSource retrieving credential: type=%s, alias=%s", credentialType.getSimpleName(), alias.toString());
         //TODO support more credential types
         if (credentialType == PasswordCredential.class) {
             try {
@@ -179,26 +179,26 @@ public class VaultCredentialSource implements CredentialSource {
                 // Use new alias-based methods
                 Map<String, Object> secretData = vaultConnector.getSecretData(alias);
                 if (secretData == null) {
-                    ROOT_LOGGER.credentialSourceNotFound(alias.toString(), "secret data not found");
+                    ROOT_LOGGER.tracef("VaultCredentialSource credential not found: alias=%s, reason=%s", alias.toString(), "secret data not found");
                     return null;
                 }
 
                 String password = VaultKeyPathOperations.resolveKeyPath(secretData, alias.getKeyPath());
                 if (password == null) {
-                    ROOT_LOGGER.credentialSourceNotFound(alias.toString(), "key not found in secret data");
+                    ROOT_LOGGER.tracef("VaultCredentialSource credential not found: alias=%s, reason=%s", alias.toString(), "key not found in secret data");
                     return null;
                 }
                 PasswordFactory factory = PasswordFactory.getInstance(ClearPassword.ALGORITHM_CLEAR, ELYTRON_PASSWORD_PROVIDERS);
                 ClearPassword clearPassword = (ClearPassword) factory.generatePassword(
                         new ClearPasswordSpec(password.toCharArray()));
-                ROOT_LOGGER.credentialSourceRetrieved(alias.toString());
+                ROOT_LOGGER.tracef("VaultCredentialSource credential retrieved successfully: alias=%s", alias.toString());
                 return credentialType.cast(new PasswordCredential(clearPassword));
             } catch (Exception e) {
                 throw ROOT_LOGGER.failedToRetrieveCredentialFromVaultIo(e.getMessage(), e);
             }
         }
 
-        ROOT_LOGGER.credentialSourceUnsupportedType(credentialType.getSimpleName());
+        ROOT_LOGGER.tracef("VaultCredentialSource unsupported credential type requested: %s", credentialType.getSimpleName());
         return null;
     }
 
