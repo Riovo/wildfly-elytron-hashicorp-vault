@@ -296,4 +296,7 @@ public interface HashiCorpVaultLogger extends BasicLogger {
 
     @Message(id = 80, value = "Legacy path format '%s' is not supported when supportLegacyAliasFormat is disabled. Use '@mount#secretpath' or '#secretpath' format instead.")
     CredentialStoreException legacyPathFormatNotSupported(String path);
+
+    @Message(id = 81, value = "Failed to build Vault TLS configuration")
+    IOException failedToBuildVaultTlsConfiguration(@Cause Exception e);
 }

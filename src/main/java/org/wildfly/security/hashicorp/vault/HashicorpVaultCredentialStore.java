@@ -203,7 +203,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
             try {
                 sslConfig.build();
             } catch (VaultException e) {
-                throw new IOException("Failed to build Vault TLS configuration", e);
+                throw ROOT_LOGGER.failedToBuildVaultTlsConfiguration(e);
             }
             vaultConnector = new VaultConnector(this.hostAddress, token, this.namespace, sslConfig, true, sslContext);
             vaultConnector.configure();
