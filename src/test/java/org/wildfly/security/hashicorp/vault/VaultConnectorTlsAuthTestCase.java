@@ -8,9 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
@@ -24,11 +22,6 @@ import org.wildfly.security.hashicorp.vault.auth.TlsCertAuthConfig;
 
 import io.github.jopenlibs.vault.SslConfig;
 import io.github.jopenlibs.vault.VaultException;
-import io.smallrye.certs.CertificateFiles;
-import io.smallrye.certs.CertificateGenerator;
-import io.smallrye.certs.CertificateRequest;
-import io.smallrye.certs.Format;
-import io.smallrye.certs.PemCertificateFiles;
 
 /**
  * Set of tests verifying functionality of VaultConnector when using TLS certificate authentication method
@@ -61,8 +54,8 @@ public class VaultConnectorTlsAuthTestCase {
                 //to enable HTTPS
                 .pemFile(vaultTestContainer.getHttpsTrustFile().toFile())
                 //for TLS certificate auth method
-                .clientPemFile(vaultTestContainer.getClientCertificateFiles().clientCertFile().toFile())
-                .clientKeyPemFile(vaultTestContainer.getClientCertificateFiles().clientKeyFile().toFile())
+                .clientPemFile(vaultTestContainer.getClientCertificateFiles().certFile().toFile())
+                .clientKeyPemFile(vaultTestContainer.getClientCertificateFiles().keyFile().toFile())
                 .verify(true)
                 .build();
 
@@ -150,21 +143,14 @@ public class VaultConnectorTlsAuthTestCase {
      */
     @Test
     public void testCertAuthFailsWithUntrustedClientCert() throws Exception {
-        Path wrongCertDir = Files.createTempDirectory("wrong_client_certs");
+        Path wrongCertDir = TlsTestMaterial.temporaryDirectory("wrong_client_certs");
         try {
-            CertificateRequest request = new CertificateRequest()
-                    .withName("wrong")
-                    .withPassword("secret")
-                    .withClientCertificate()
-                    .withFormat(Format.PEM);
-            List<CertificateFiles> wrongCerts = new CertificateGenerator(wrongCertDir, true).generate(request);
-            PemCertificateFiles wrongPem = (PemCertificateFiles) wrongCerts.stream()
-                    .filter(f -> f instanceof PemCertificateFiles).findFirst().get();
+            TlsTestMaterial wrongPem = TlsTestMaterial.generate(wrongCertDir, "localhost", true);
 
             SslConfig wrongClientConfig = new SslConfig()
                     .pemFile(vaultTestContainer.getHttpsTrustFile().toFile())
-                    .clientPemFile(wrongPem.clientCertFile().toFile())
-                    .clientKeyPemFile(wrongPem.clientKeyFile().toFile())
+                    .clientPemFile(wrongPem.certFile().toFile())
+                    .clientKeyPemFile(wrongPem.keyFile().toFile())
                     .verify(true)
                     .build();
 

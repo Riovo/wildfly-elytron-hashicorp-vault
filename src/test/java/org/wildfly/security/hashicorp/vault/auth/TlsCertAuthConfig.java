@@ -12,8 +12,7 @@ import java.util.List;
 
 import org.testcontainers.utility.MountableFile;
 import org.testcontainers.vault.VaultContainer;
-
-import io.smallrye.certs.PemCertificateFiles;
+import org.wildfly.security.hashicorp.vault.TlsTestMaterial;
 
 /**
  * Utility which will configure a vault container for TLS certificate authentication method.
@@ -22,7 +21,7 @@ public class TlsCertAuthConfig implements VaultContainerAuthConfig {
 
     private final Path certsRootInContainer = Path.of("/vault/auth-certs");
 
-    private final PemCertificateFiles pemCertificateFiles;
+    private final TlsTestMaterial pemCertificateFiles;
     private final List<String> policies;
 
     private TlsCertAuthConfig(Builder builder) {
@@ -44,12 +43,12 @@ public class TlsCertAuthConfig implements VaultContainerAuthConfig {
                 "    display_name=\"root-cert-test\" \\\n" +
                 "    policies=\"%s\" \\\n" +
                 "    certificate=@%s", String.join(",", policies),
-                certsRootInContainer.resolve(pemCertificateFiles.clientCertFile().getFileName()).toAbsolutePath()));
+                certsRootInContainer.resolve(pemCertificateFiles.certFile().getFileName()).toAbsolutePath()));
     }
 
     public static final class Builder {
 
-        private final PemCertificateFiles pemCertificateFiles;
+        private final TlsTestMaterial pemCertificateFiles;
 
         private final List<String> policies = new LinkedList<>();
 
@@ -58,7 +57,7 @@ public class TlsCertAuthConfig implements VaultContainerAuthConfig {
          * @param pemCertificateFiles certificates which will be used to configure TLS authentication. The trust file/ca
          *                            file will be used to configure the auth path.
          */
-        public Builder(PemCertificateFiles pemCertificateFiles) {
+        public Builder(TlsTestMaterial pemCertificateFiles) {
             this.pemCertificateFiles = pemCertificateFiles;
         }
 

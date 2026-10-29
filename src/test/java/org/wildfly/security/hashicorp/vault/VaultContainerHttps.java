@@ -7,19 +7,12 @@ package org.wildfly.security.hashicorp.vault;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import org.jboss.logging.Logger;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.MountableFile;
 import org.testcontainers.vault.VaultContainer;
 import org.wildfly.security.hashicorp.vault.logging.JbossLoggingLogConsumer;
-
-import io.smallrye.certs.CertificateFiles;
-import io.smallrye.certs.CertificateGenerator;
-import io.smallrye.certs.CertificateRequest;
-import io.smallrye.certs.Format;
-import io.smallrye.certs.PemCertificateFiles;
 
 /**
  * Represents a {@link VaultContainer} running with a secured interface.
@@ -73,15 +66,9 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
 
     private static final Path VAULT_CONFIG_CONTAINER_PATH = Path.of("/vault/config");
 
-    //certificate chain used by TLS listener
-    private final Path generatedCertificatesDir;
-    private static PemCertificateFiles serverPemCertificateFiles;
-
-    //certificate chain used for authenticating clients
-    private final Path generatedClientCertificatesDir;
-    private static PemCertificateFiles clientPemCertificateFiles;
-
-    //directories mounted/copied to the container
+    private final Path fixtureDir;
+    private final TlsTestMaterial serverCertificates;
+    private final TlsTestMaterial clientCertificates;
     private final Path mountedVaultCertsDir;
     private final Path mountedVaultConfigDir;
 
@@ -108,19 +95,22 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
         final MountableFile certs;
         final MountableFile config;
 
-        this.generatedCertificatesDir = Files.createTempDirectory("generated_certificates");
-        this.generatedClientCertificatesDir = Files.createTempDirectory("generated_client_certificates");
-        this.mountedVaultCertsDir = Files.createTempDirectory("vault_certs");
-        this.mountedVaultConfigDir = Files.createTempDirectory("vault_config");
-
+        this.fixtureDir = TlsTestMaterial.temporaryDirectory("https-vault-");
+        this.mountedVaultCertsDir = fixtureDir.resolve("certs");
+        this.mountedVaultConfigDir = fixtureDir.resolve("config");
         try {
-            prepareCertificatesForClientAuthentication(this.generatedClientCertificatesDir, this.mountedVaultCertsDir);
-            prepareCertificatesForHttps(this.generatedCertificatesDir, this.mountedVaultCertsDir);
-            certs = MountableFile.forHostPath(this.mountedVaultCertsDir, 0777);
-
-            config = MountableFile.forHostPath(prepareVaultConfig(this.mountedVaultConfigDir, requireMutualTls), 0777);
+            Files.createDirectories(mountedVaultCertsDir);
+            Files.createDirectories(mountedVaultConfigDir);
+            serverCertificates = TlsTestMaterial.generate(fixtureDir.resolve("server"), getHost(), false);
+            clientCertificates = TlsTestMaterial.generate(fixtureDir.resolve("client"), getHost(), true);
+            Files.copy(serverCertificates.certFile(), mountedVaultCertsDir.resolve(VAULT_CERT_NAME));
+            Files.copy(serverCertificates.keyFile(), mountedVaultCertsDir.resolve(VAULT_CERT_KEY_NAME));
+            Files.copy(clientCertificates.trustFile(), mountedVaultCertsDir.resolve(CLIENT_CA_CERT_NAME));
+            certs = MountableFile.forHostPath(mountedVaultCertsDir, 0755);
+            config = MountableFile.forHostPath(prepareVaultConfig(mountedVaultConfigDir, requireMutualTls), 0755);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            VaultTestUtils.cleanupDir(fixtureDir);
+            throw new IOException("Failed to prepare Vault TLS material", e);
         }
 
         this.withCopyFileToContainer(certs, VAULT_CERT_CONTAINER_PATH.toAbsolutePath().toString())
@@ -140,49 +130,6 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
                     .allowInsecure()
                     .forResponsePredicate(response -> response.contains("\"initialized\":true")));
         }
-    }
-
-    private static void prepareCertificatesForHttps(final Path certTmpDir, final Path vaultTmpCertDir) throws Exception {
-        final CertificateRequest request = new CertificateRequest()
-                .withName("test")
-                .withPassword("secret")
-                .withClientCertificate()
-                .withFormat(Format.PEM)
-                .withFormat(Format.JKS);
-
-        final List<CertificateFiles> certificateFiles = new CertificateGenerator(certTmpDir, true).generate(request);
-
-        serverPemCertificateFiles = (PemCertificateFiles) certificateFiles.stream()
-                .filter(files -> files instanceof PemCertificateFiles).findFirst().get();
-
-        final Path certPath = serverPemCertificateFiles.certFile();
-        final Path keyPath  = serverPemCertificateFiles.keyFile();
-
-        Files.copy(certPath, vaultTmpCertDir.resolve(VAULT_CERT_NAME), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-        Files.copy(keyPath,  vaultTmpCertDir.resolve(VAULT_CERT_KEY_NAME), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-    }
-
-    /**
-     * Generate certificate chain for client authentication method.
-     * We need to do that here because the container/vault must trust the issuer of client certificate.
-     * See tls_client_ca_file vault configuration key where the CA cert is set.
-     * @param certTmpDir directory where to generate the chain
-     * @param vaultTmpCertDir target directory where to copy final client certificate and key
-     */
-    private static void prepareCertificatesForClientAuthentication(final Path certTmpDir, final Path vaultTmpCertDir) throws Exception {
-        final CertificateRequest request = new CertificateRequest()
-                .withName("test")
-                .withPassword("secret")
-                .withClientCertificate()
-                .withFormat(Format.PEM)
-                .withFormat(Format.JKS);
-
-        final List<CertificateFiles> certificateFiles = new CertificateGenerator(certTmpDir, true).generate(request);
-
-        clientPemCertificateFiles = (PemCertificateFiles) certificateFiles.stream()
-                .filter(files -> files instanceof PemCertificateFiles).findFirst().get();
-
-        Files.copy(clientPemCertificateFiles.trustFile(), vaultTmpCertDir.resolve(CLIENT_CA_CERT_NAME), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     }
 
     /**
@@ -210,7 +157,7 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
      * @return CA certificate/trust file
      */
     public Path getHttpsTrustFile() {
-        return serverPemCertificateFiles.trustFile();
+        return serverCertificates.trustFile();
     }
 
     /**
@@ -219,17 +166,31 @@ public class VaultContainerHttps<SELF extends VaultContainerHttps<SELF>> extends
      * By having the container class to generate the chain we can ensure that proper trust is established everywhere.
      * @return Whole chain of generated client certificates
      */
-    public PemCertificateFiles getClientCertificateFiles() {
-        return clientPemCertificateFiles;
+    public TlsTestMaterial getClientCertificateFiles() {
+        return clientCertificates;
+    }
+
+    public Path getHttpsTrustStoreFile() {
+        return serverCertificates.trustStoreFile();
     }
 
     @Override
-    public void close() {
-        super.close();
-        VaultTestUtils.cleanupDir(this.generatedCertificatesDir);
-        VaultTestUtils.cleanupDir(this.generatedClientCertificatesDir);
-        VaultTestUtils.cleanupDir(this.mountedVaultCertsDir);
-        VaultTestUtils.cleanupDir(this.mountedVaultConfigDir);
+    public void start() {
+        try {
+            super.start();
+        } catch (RuntimeException | Error e) {
+            stop();
+            throw e;
+        }
+    }
+
+    @Override
+    public void stop() {
+        try {
+            super.stop();
+        } finally {
+            VaultTestUtils.cleanupDir(fixtureDir);
+        }
     }
 
     @Override

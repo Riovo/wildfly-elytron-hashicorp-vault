@@ -9,11 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.Provider;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import javax.net.ssl.SSLContext;
@@ -32,12 +30,6 @@ import org.wildfly.security.password.PasswordFactory;
 import org.wildfly.security.password.WildFlyElytronPasswordProvider;
 import org.wildfly.security.password.interfaces.ClearPassword;
 import org.wildfly.security.password.spec.ClearPasswordSpec;
-
-import io.smallrye.certs.CertificateFiles;
-import io.smallrye.certs.CertificateGenerator;
-import io.smallrye.certs.CertificateRequest;
-import io.smallrye.certs.Format;
-import io.smallrye.certs.PemCertificateFiles;
 
 /**
  * Tests that {@link HashicorpVaultCredentialStore} works with TLS certificate authentication,
@@ -68,8 +60,8 @@ public class HashicorpVaultCredentialStoreTlsAuthTestCase {
 
         sslContext = SslContextTestHelper.createWithClientAuth(
                 vaultTestContainer.getHttpsTrustFile(),
-                vaultTestContainer.getClientCertificateFiles().clientCertFile(),
-                vaultTestContainer.getClientCertificateFiles().clientKeyFile());
+                vaultTestContainer.getClientCertificateFiles().certFile(),
+                vaultTestContainer.getClientCertificateFiles().keyFile());
     }
 
     @AfterEach
@@ -137,21 +129,14 @@ public class HashicorpVaultCredentialStoreTlsAuthTestCase {
      */
     @Test
     public void testCertAuthFailsWithUntrustedClientCert() throws Exception {
-        Path wrongCertDir = Files.createTempDirectory("wrong_client_certs");
+        Path wrongCertDir = TlsTestMaterial.temporaryDirectory("wrong_client_certs");
         try {
-            CertificateRequest request = new CertificateRequest()
-                    .withName("wrong")
-                    .withPassword("secret")
-                    .withClientCertificate()
-                    .withFormat(Format.PEM);
-            List<CertificateFiles> wrongCerts = new CertificateGenerator(wrongCertDir, true).generate(request);
-            PemCertificateFiles wrongPem = (PemCertificateFiles) wrongCerts.stream()
-                    .filter(f -> f instanceof PemCertificateFiles).findFirst().get();
+            TlsTestMaterial wrongPem = TlsTestMaterial.generate(wrongCertDir, "localhost", true);
 
             SSLContext wrongSslContext = SslContextTestHelper.createWithClientAuth(
                     vaultTestContainer.getHttpsTrustFile(),
-                    wrongPem.clientCertFile(),
-                    wrongPem.clientKeyFile());
+                    wrongPem.certFile(),
+                    wrongPem.keyFile());
 
             HashicorpVaultCredentialStore store = new HashicorpVaultCredentialStore();
             store.setSslContext(wrongSslContext);

@@ -30,6 +30,7 @@ import org.wildfly.security.credential.store.UnsupportedCredentialTypeException;
 import org.wildfly.security.password.interfaces.ClearPassword;
 
 import io.github.jopenlibs.vault.SslConfig;
+import io.github.jopenlibs.vault.VaultException;
 
 /**
  * Credential store backed by HashiCorp Vault.
@@ -199,6 +200,11 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
                 }
             }
 
+            try {
+                sslConfig.build();
+            } catch (VaultException e) {
+                throw ROOT_LOGGER.failedToBuildVaultTlsConfiguration(e);
+            }
             vaultConnector = new VaultConnector(this.hostAddress, token, this.namespace, sslConfig, true, sslContext);
             vaultConnector.configure();
 
