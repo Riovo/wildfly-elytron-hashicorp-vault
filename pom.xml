@@ -28,7 +28,7 @@
         
         <version.wildfly.elytron>2.8.3.Final</version.wildfly.elytron>
         <version.wildfly.common>2.0.1</version.wildfly.common>
-        <version.vault.java.driver>6.2.1</version.vault.java.driver>
+        <version.vault.java.driver>6.2.3</version.vault.java.driver>
         <version.metainf-services>1.11</version.metainf-services>
         <version.org.testcontainers>2.0.2</version.org.testcontainers>
         <version.org.junit>6.0.0</version.org.junit>
