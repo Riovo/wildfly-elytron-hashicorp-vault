@@ -41,7 +41,9 @@ final class SensitiveValueHasher {
     }
 
     static void traceLog(String format, String sensitiveFirstParam, Object... remainingParams) {
-        if (!ROOT_LOGGER.isTraceEnabled()) return;
+        if (!ROOT_LOGGER.isTraceEnabled()) {
+            return;
+        }
         String hashed = hashForLog(sensitiveFirstParam);
         Object[] allArgs = new Object[remainingParams.length + 1];
         allArgs[0] = hashed;

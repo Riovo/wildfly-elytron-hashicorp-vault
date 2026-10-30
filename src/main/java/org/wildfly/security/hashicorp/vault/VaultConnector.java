@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+
 
 import javax.net.ssl.SSLContext;
 
@@ -107,10 +107,16 @@ public class VaultConnector {
      */
     private Vault tryLoginWithFallback(LoginContext loginContext, VaultConfig config) throws CredentialStoreException {
         List<VaultLoginStrategy> strategies = composePossibleLoginStrategiesPrioritized(loginContext);
-        String strategyNames = strategies.stream()
-                .map(s -> s.getClass().getSimpleName())
-                .collect(Collectors.joining(", "));
-        ROOT_LOGGER.tracef("Starting login with fallback: %d strategies to try: [%s]", strategies.size(), strategyNames);
+        if (ROOT_LOGGER.isTraceEnabled()) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < strategies.size(); i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                sb.append(strategies.get(i).getClass().getSimpleName());
+            }
+            ROOT_LOGGER.tracef("Starting login with fallback: %d strategies to try: [%s]", strategies.size(), sb.toString());
+        }
 
         for (VaultLoginStrategy strategy : strategies) {
             try {
