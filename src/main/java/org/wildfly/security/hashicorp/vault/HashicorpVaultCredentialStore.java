@@ -175,7 +175,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
             if (this.keyStorePath != null && !this.keyStorePath.trim().isEmpty()) {
                 SensitiveValueHasher.traceLog("Loading KeyStore from path: %s, password=%s",
-                        this.keyStorePass, this.keyStorePath);
+                        this.keyStorePath, this.keyStorePass);
                 try {
                     KeyStore keyStore = KeyStore.getInstance("JKS");
                     try (java.io.FileInputStream fis = new java.io.FileInputStream(this.keyStorePath)) {
@@ -194,7 +194,7 @@ public class HashicorpVaultCredentialStore extends CredentialStoreSpi {
 
             if (this.trustStorePath != null && !this.trustStorePath.trim().isEmpty()) {
                 SensitiveValueHasher.traceLog("Loading TrustStore from path: %s, password=%s",
-                        this.trustStorePass, this.trustStorePath);
+                        this.trustStorePath, this.trustStorePass);
                 try {
                     KeyStore trustStore = KeyStore.getInstance("JKS");
                     try (java.io.FileInputStream fis = new java.io.FileInputStream(this.trustStorePath)) {
